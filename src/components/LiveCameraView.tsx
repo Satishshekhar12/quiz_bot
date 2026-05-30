@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { uploadToTelegram } from '../utils/telegramUpload';
+import { useOpenAIMCQQueue } from '../hooks/useOpenAIMCQQueue';
+import { OpenAIMCQStatusBox } from './OpenAIMCQStatusBox';
+import { useOpenAIMCQStatus } from '../hooks/useOpenAIMCQStatus';
 
 interface LiveCameraViewProps {
   onCapturePress?: () => void;
@@ -31,6 +34,12 @@ export const LiveCameraView = forwardRef<
   const [cameraReady, setCameraReady] = useState(false);
   const [permissionRequested, setPermissionRequested] = useState(false);
   const queueProcessingRef = useRef(false);
+  
+  // OpenAI MCQ analysis hook - INDEPENDENT from Telegram queue
+  const { queueForAnalysis } = useOpenAIMCQQueue();
+  
+  // OpenAI MCQ status box
+  const mcqStatus = useOpenAIMCQStatus();
 
   const device = useCameraDevice('back');
 
@@ -130,6 +139,9 @@ export const LiveCameraView = forwardRef<
         // Add to upload queue (don't wait for upload to complete)
         setUploadQueue(prevQueue => [...prevQueue, photo.path]);
         console.log('Photo added to queue. Queue size:', uploadQueue.length + 1);
+        
+        // Also queue for OpenAI MCQ analysis (INDEPENDENT from Telegram)
+        queueForAnalysis(photo.path);
       }
     } catch (error) {
       console.error('Error capturing photo:', error);
@@ -224,6 +236,15 @@ export const LiveCameraView = forwardRef<
         </Text>
         <Text style={styles.statusHint}>(Press S or tap button)</Text>
       </View>
+
+      {/* OpenAI MCQ Status Box */}
+      <OpenAIMCQStatusBox
+        status={mcqStatus.status as any}
+        answer={mcqStatus.answer}
+        error={mcqStatus.error}
+        duration={mcqStatus.duration}
+        progress={mcqStatus.progress}
+      />
     </View>
   );
 });

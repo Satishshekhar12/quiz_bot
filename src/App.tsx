@@ -1,11 +1,14 @@
-import React, { JSX, useEffect, useRef } from 'react';
+import React, {JSX, useEffect, useRef} from 'react';
 import {
   View,
   StyleSheet,
   NativeEventEmitter,
   NativeModules,
 } from 'react-native';
-import { LiveCameraView, LiveCameraViewHandle } from './components/LiveCameraView';
+import {
+  LiveCameraView,
+  LiveCameraViewHandle,
+} from './components/LiveCameraView';
 
 function App(): JSX.Element {
   const cameraRef = useRef<LiveCameraViewHandle>(null);
@@ -13,15 +16,18 @@ function App(): JSX.Element {
   // Set up keyboard listener for 'S' key to trigger camera capture
   useEffect(() => {
     try {
-      const { RCTKeyboardModule } = NativeModules;
+      const {RCTKeyboardModule} = NativeModules;
       if (RCTKeyboardModule) {
         const keyboardEmitter = new NativeEventEmitter(RCTKeyboardModule);
-        const subscription = keyboardEmitter.addListener('onKeyDown', (event: any) => {
-          // 'S' key or 's' key (keyCodes 83 or 115)
-          if (event.keyCode === 83 || event.keyCode === 115) {
-            handleKeyboardCapture();
-          }
-        });
+        const subscription = keyboardEmitter.addListener(
+          'onKeyDown',
+          (event: any) => {
+            // 'S' key or 's' key (keyCodes 83 or 115)
+            if (event.keyCode === 83 || event.keyCode === 115) {
+              handleKeyboardCapture();
+            }
+          },
+        );
         return () => subscription.remove();
       }
     } catch (error) {

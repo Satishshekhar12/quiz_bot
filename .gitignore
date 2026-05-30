@@ -76,3 +76,4 @@ yarn-error.log
 
 # API Keys and Secrets
 api.txt
+src/config/openai.config.json

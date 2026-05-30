@@ -1,0 +1,6 @@
+{
+  "openai": {
+    "apiKey": "YOUR_OPENAI_API_KEY_HERE",
+    "model": "gpt-4o"
+  }
+}
