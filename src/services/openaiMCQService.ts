@@ -37,23 +37,41 @@ export interface OpenAIMCQTestResult {
 
 /**
  * MCQ Analysis Prompt
- * Instructs OpenAI to analyze MCQ image and return ONLY the answer letter
+ * Handles single and multiple-answer MCQs with flexible parsing
  */
-const MCQ_ANALYSIS_PROMPT = `You will receive an image containing a multiple-choice question.
+const MCQ_ANALYSIS_PROMPT = `You will receive an image.
 
-Analyze the image carefully and return ONLY the final answer option.
+Analyze the image carefully.
 
-Valid outputs:
+If a question is visible and can reasonably be understood, attempt to solve it even if the image is blurry, tilted, cropped, noisy, low quality, or imperfect.
+
+For single-answer MCQs return:
+
 A
 B
 C
 D
 E
+F
 
-No explanation.
+For multiple-answer MCQs return:
+
+A,B
+A,C
+B,D
+
+etc.
+
+If the image is extremely unclear but you can still infer a likely answer, return your best answer.
+
+If no valid question can be identified at all (for example: black image, blank image, no question visible, no answer choices visible), return exactly:
+
+NO_QUESTION
+
+No explanations.
 No reasoning.
-No extra text.
-Return only a single option.`;
+No markdown.
+Only return the final answer.`;
 
 /**
  * Convert image file to base64
@@ -116,7 +134,7 @@ export const analyzeOpenAIMCQ = async (
           ],
         },
       ],
-      max_tokens: 10, // Only expect single letter response
+      max_tokens: 20, // Allow for multi-answer responses like "A,B,C,D,E" or "NO_QUESTION"
       temperature: 0, // Deterministic response
     };
 
@@ -188,31 +206,55 @@ export const analyzeOpenAIMCQ = async (
 };
 
 /**
- * Extract MCQ answer letter from OpenAI response
- * Handles various response formats and extracts A, B, C, D, or E
+ * Extract MCQ answer from OpenAI response
+ * Handles:
+ * - Single answers: A, B, C, D, E, F
+ * - Multiple answers: A,B or A,C,D etc.
+ * - NO_QUESTION for unclear images
+ * - Flexible parsing to extract from explanatory text
  */
 const extractMCQAnswer = (response: string): string | undefined => {
   if (!response) return undefined;
 
-  // Trim and uppercase
   const cleaned = response.trim().toUpperCase();
 
-  // Check if it's a single letter answer
-  const match = cleaned.match(/^[A-E]$/);
-  if (match) {
-    return match[0];
+  // Check for NO_QUESTION
+  if (cleaned === 'NO_QUESTION' || cleaned.includes('NO_QUESTION')) {
+    return 'NO_QUESTION';
   }
 
-  // Try to find first occurrence of valid answer
-  const firstAnswer = cleaned.match(/[A-E]/);
-  if (firstAnswer) {
-    console.warn('[OpenAI MCQ] Response contains extra text, extracted:', firstAnswer[0]);
-    return firstAnswer[0];
+  // Pattern for valid single/multiple answers: A, B,C D,E,F etc.
+  const multiAnswerPattern = /^[A-F](,[A-F])*$/;
+
+  // Check if entire response is valid answer(s)
+  const withoutSpaces = cleaned.replace(/\s/g, '');
+  if (multiAnswerPattern.test(withoutSpaces)) {
+    return withoutSpaces;
   }
 
-  // If no valid answer found, log warning
+  // Flexible parsing: Extract from explanatory text
+  // Matches patterns like: "Possible answer: C" or "My best guess is B"
+  const flexiblePattern = /([A-F](?:,[A-F])*)/g;
+  const matches = cleaned.match(flexiblePattern);
+
+  if (matches && matches.length > 0) {
+    const extracted = matches[0].replace(/\s/g, '');
+    if (multiAnswerPattern.test(extracted)) {
+      console.warn('[OpenAI MCQ] Response contains extra text, extracted:', extracted);
+      return extracted;
+    }
+  }
+
+  // Last resort: find any single letter A-F
+  const singleLetter = cleaned.match(/[A-F]/);
+  if (singleLetter) {
+    console.warn('[OpenAI MCQ] Extracted single letter from unclear response:', singleLetter[0]);
+    return singleLetter[0];
+  }
+
+  // If no valid answer found, return NO_QUESTION
   console.warn('[OpenAI MCQ] Could not extract valid answer from:', response);
-  return undefined;
+  return 'NO_QUESTION';
 };
 
 /**
